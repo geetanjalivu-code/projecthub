@@ -20,7 +20,6 @@ export function ProfileModal({ onClose }: Props) {
   const ai = getAiSettings();
   const [apiKey, setApiKey] = useState(ai.apiKey);
   const [model, setModel] = useState(ai.model);
-  const [provider, setProvider] = useState<AiProvider>(ai.provider);
   const [aiSaved, setAiSaved] = useState(false);
 
   const providers = user?.app_metadata?.providers as string[] | undefined;

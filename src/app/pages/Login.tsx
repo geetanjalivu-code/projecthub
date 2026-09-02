@@ -31,10 +31,7 @@ function ConnectSupabase() {
   };
 
   return (
-    <div className="mb-6 border border-border bg-muted/40 p-4">
-      <button type="button" onClick={() => setOpen(o => !o)} className="w-full text-left text-xs text-foreground" style={{ fontWeight: 600 }}>
-        {isSupabaseConfigured ? 'Supabase connected — edit keys' : 'Connect Supabase (required for sign in)'}
-      </button>
+    <div>
       {open && (
         <div className="mt-3 space-y-2">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -269,7 +266,7 @@ export function Login() {
             onClick={continueAsGuest}
             className="mt-6 w-full py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted border border-dashed border-border transition-all"
           >
-            Continue as guest — work stays on this browser until you sign in
+            Continue as guest — work stays on this browser
           </button>
         </div>
       </div>
