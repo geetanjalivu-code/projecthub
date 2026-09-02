@@ -20,6 +20,9 @@ interface AuthCtx {
   signOut: () => Promise<void>;
   updateProfile: (fields: Partial<Pick<DbProfile, 'display_name' | 'avatar_url'>>) => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
+  passwordRecovery: boolean;
+  clearPasswordRecovery: () => void;
 }
 
 const Ctx = createContext<AuthCtx>(null!);
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem(GUEST_KEY) === '1');
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const fetchProfile = async (u: User) => {
     const fallback = profileFromUser(u);
@@ -65,6 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+      setPasswordRecovery(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -76,13 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         localStorage.removeItem(GUEST_KEY);
         setIsGuest(false);
-        fetchProfile(session.user);
+        if (event !== 'PASSWORD_RECOVERY') fetchProfile(session.user);
       } else {
         setProfile(null);
       }
@@ -166,8 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    localStorage.removeItem(GUEST_KEY);
     setIsGuest(false);
+    setPasswordRecovery(false);
+    localStorage.removeItem(GUEST_KEY);
     if (isSupabaseConfigured) await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -190,20 +200,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
-    return { error: error?.message ?? null };
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    return { error: mapAuthError(error?.message) };
   };
 
-  const isAuthenticated = !!user;
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setPasswordRecovery(false);
+    return { error: mapAuthError(error?.message) };
+  };
+
+  const clearPasswordRecovery = () => setPasswordRecovery(false);
+
+  const isAuthenticated = !!user && !passwordRecovery;
   const authReady = isAuthenticated || isGuest;
 
   return (
     <Ctx.Provider value={{
       user, profile, session, loading, isGuest, isAuthenticated, authReady,
+      passwordRecovery, clearPasswordRecovery,
       signIn, signUp, signInWithGoogle, continueAsGuest, exitGuest,
-      signOut, updateProfile, resetPassword,
+      signOut, updateProfile, resetPassword, updatePassword,
     }}>
       {children}
     </Ctx.Provider>

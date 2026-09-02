@@ -147,13 +147,59 @@ export function createProject(params: {
 }
 
 // ── localStorage I/O ──────────────────────────────────────────────────────────
-const LS_KEY = 'uxHub_projects';
-export const loadProjects = (): Project[] => {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '[]'); }
-  catch { return []; }
+const LEGACY_PROJECTS_KEY = 'uxHub_projects';
+export const GUEST_PROJECTS_KEY = 'uxHub_guest_projects';
+
+function parseProjects(raw: string | null): Project[] {
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data as Project[] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Move leftover shared-key data into the guest bucket, then delete the shared key. */
+function absorbLegacySharedKey() {
+  try {
+    const legacy = localStorage.getItem(LEGACY_PROJECTS_KEY);
+    if (legacy && parseProjects(legacy).length > 0) {
+      const existing = parseProjects(localStorage.getItem(GUEST_PROJECTS_KEY));
+      if (existing.length === 0) localStorage.setItem(GUEST_PROJECTS_KEY, legacy);
+    }
+    localStorage.removeItem(LEGACY_PROJECTS_KEY);
+  } catch { /* ignore */ }
+}
+
+export const loadGuestProjects = (): Project[] => {
+  absorbLegacySharedKey();
+  return parseProjects(localStorage.getItem(GUEST_PROJECTS_KEY));
 };
-export const saveProjects = (projects: Project[]) =>
-  localStorage.setItem(LS_KEY, JSON.stringify(projects));
+
+export const saveGuestProjects = (projects: Project[]) => {
+  localStorage.setItem(GUEST_PROJECTS_KEY, JSON.stringify(projects));
+};
+
+export const clearGuestProjects = () => {
+  localStorage.removeItem(GUEST_PROJECTS_KEY);
+  localStorage.removeItem(LEGACY_PROJECTS_KEY);
+};
+
+export function clearUserProjectCache() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k === LEGACY_PROJECTS_KEY || k.startsWith('uxHub_projects_'))) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch { /* ignore */ }
+}
+
+/** @deprecated Use loadGuestProjects / Supabase. Kept so old imports compile. */
+export const loadProjects = (): Project[] => [];
+export const saveProjects = (_projects: Project[]) => { /* signed-in data is not cached locally */ };
 
 // ── Debounce ──────────────────────────────────────────────────────────────────
 export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number) {

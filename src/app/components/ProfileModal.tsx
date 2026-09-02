@@ -20,11 +20,12 @@ export function ProfileModal({ onClose }: Props) {
   const ai = getAiSettings();
   const [apiKey, setApiKey] = useState(ai.apiKey);
   const [model, setModel] = useState(ai.model);
+  const [aiProvider, setAiProvider] = useState<AiProvider>(ai.provider);
   const [aiSaved, setAiSaved] = useState(false);
 
-  const providers = user?.app_metadata?.providers as string[] | undefined;
-  const provider = (user?.app_metadata?.provider as string | undefined) || providers?.[0];
-  const isGoogle = provider === 'google' || !!user?.identities?.some(i => i.provider === 'google');
+  const authProviders = user?.app_metadata?.providers as string[] | undefined;
+  const authProvider = (user?.app_metadata?.provider as string | undefined) || authProviders?.[0];
+  const isGoogle = authProvider === 'google' || !!user?.identities?.some(i => i.provider === 'google');
   const canChangePassword = !!user && !isGuest && !isGoogle;
 
   const saveName = async () => {
@@ -47,9 +48,9 @@ export function ProfileModal({ onClose }: Props) {
   };
 
   const saveAi = () => {
-    const next = detectAiProvider(apiKey, provider);
+    const next = detectAiProvider(apiKey, aiProvider);
     saveAiSettings({ apiKey, model, provider: next });
-    setProvider(next);
+    setAiProvider(next);
     setAiSaved(true);
     setTimeout(() => setAiSaved(false), 2000);
   };
@@ -131,13 +132,13 @@ export function ProfileModal({ onClose }: Props) {
             <div className="space-y-2">
               <input type="password" value={apiKey} onChange={e => {
                 setApiKey(e.target.value);
-                setProvider(detectAiProvider(e.target.value, provider));
+                setAiProvider(detectAiProvider(e.target.value, aiProvider));
               }}
                 placeholder="AIza… or sk-…"
                 className="w-full border border-border bg-card px-3 py-2 text-sm" />
-              <select value={provider} onChange={e => {
+              <select value={aiProvider} onChange={e => {
                 const p = e.target.value as AiProvider;
-                setProvider(p);
+                setAiProvider(p);
                 setModel(p === 'gemini' ? GEMINI_MODELS[0] : OPENAI_MODELS[0]);
               }} className="w-full border border-border bg-card px-3 py-2 text-xs">
                 <option value="openai">OpenAI</option>
@@ -145,7 +146,7 @@ export function ProfileModal({ onClose }: Props) {
               </select>
               <select value={model} onChange={e => setModel(e.target.value)}
                 className="w-full border border-border bg-card px-3 py-2 text-xs">
-                {(provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map(m => (
+                {(aiProvider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map(m => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>

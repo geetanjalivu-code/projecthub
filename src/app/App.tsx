@@ -1,12 +1,14 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { StoreProvider, useStore } from './store';
 import { Dashboard } from './Dashboard';
 import { Workspace } from './Workspace';
 import { Login } from './pages/Login';
+import { ResetPassword } from './pages/ResetPassword';
 import { AiAssistant } from './components/AiAssistant';
 
 function AppShell() {
-  const { loading, authReady } = useAuth();
+  const { loading, authReady, passwordRecovery } = useAuth();
   const { currentProjectId } = useStore();
 
   if (loading) {
@@ -25,6 +27,7 @@ function AppShell() {
     );
   }
 
+  if (passwordRecovery) return <Navigate to="/reset-password" replace />;
   if (!authReady) return <Login />;
 
   return (
@@ -37,10 +40,15 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <StoreProvider>
-        <AppShell />
-      </StoreProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <StoreProvider>
+          <Routes>
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/*" element={<AppShell />} />
+          </Routes>
+        </StoreProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
