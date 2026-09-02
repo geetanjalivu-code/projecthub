@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isSupabaseConfigured, getSupabaseCredentials, saveSupabaseCredentials } from '../lib/supabase';
 import { Eye, EyeOff, AlertCircle, Sparkles, Layers, Shield, MessageSquare } from 'lucide-react';
 import { InfineonLogo } from '../components/ui';
 
@@ -14,6 +14,49 @@ function GoogleIcon() {
       <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.348 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" />
       <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" />
     </svg>
+  );
+}
+
+function ConnectSupabase() {
+  const existing = getSupabaseCredentials();
+  const [open, setOpen] = useState(!isSupabaseConfigured);
+  const [url, setUrl] = useState(existing.url);
+  const [anon, setAnon] = useState(existing.anonKey);
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+
+  const save = () => {
+    if (!url.startsWith('https://') || anon.length < 20) return;
+    saveSupabaseCredentials(url, anon);
+    window.location.reload();
+  };
+
+  return (
+    <div className="mb-6 border border-border bg-muted/40 p-4">
+      <button type="button" onClick={() => setOpen(o => !o)} className="w-full text-left text-xs text-foreground" style={{ fontWeight: 600 }}>
+        {isSupabaseConfigured ? 'Supabase connected — edit keys' : 'Connect Supabase (required for sign in)'}
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Dashboard → <strong>Project Settings → API</strong>. Paste <strong>Project URL</strong> and the <strong>anon public</strong> key.
+            Do not paste the <strong>service_role</strong> secret here. You can also put the same values in the project-root <code className="bg-card px-1">.env</code> as <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+          </p>
+          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co"
+            className="w-full border border-border bg-card px-3 py-2 text-xs" />
+          <input value={anon} onChange={e => setAnon(e.target.value)} placeholder="anon or sb_publishable_… key"
+            className="w-full border border-border bg-card px-3 py-2 text-xs" />
+          <button type="button" onClick={save} className="w-full py-2 bg-primary text-primary-foreground text-xs" style={{ fontWeight: 600 }}>
+            Save keys and reload
+          </button>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Then: SQL Editor → run <code className="bg-card px-1">supabase/setup.sql</code>.
+            Auth → Providers → Email → turn <strong>Confirm email OFF</strong>.
+            Auth → URL configuration: Site URL = <code className="bg-card px-1">{origin}</code>, Redirect URLs add <code className="bg-card px-1">{origin}</code> and <code className="bg-card px-1">{origin}/**</code>.
+            Google: Auth → Providers → Google → Client ID + Client secret from Google Cloud (not this form).
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -42,7 +85,6 @@ export function Login() {
       if (!name.trim()) { setError('Please enter your name.'); setLoading(false); return; }
       const { error } = await signUp(email, password, name);
       if (error) setError(error);
-      else setInfo('Check your email to confirm your account, then sign in. Your hub is waiting.');
     } else {
       const { error } = await resetPassword(email);
       if (error) setError(error);
@@ -56,9 +98,7 @@ export function Login() {
     setGoogleLoading(true);
     const { error } = await signInWithGoogle();
     if (error) {
-      setError(error.includes('provider is not enabled')
-        ? 'Google sign-in is not enabled yet. In the Supabase dashboard, open Authentication → Providers → Google, add your Google Cloud OAuth Client ID and secret, and add this site URL to Redirect URLs.'
-        : error);
+      setError(error);
       setGoogleLoading(false);
     }
   };
@@ -66,7 +106,7 @@ export function Login() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 text-white"
-        style={{ background: 'linear-gradient(165deg, #06534B 0%, #0A8276 48%, #0E9B8C 100%)' }}>
+        style={{ background: 'linear-gradient(165deg, #1D1D1D 0%, #47464a 55%, #3C3A39 100%)' }}>
         <div className="hub-mesh absolute inset-0 opacity-40" />
         <div className="relative">
           <InfineonLogo inverted />
@@ -83,10 +123,10 @@ export function Login() {
             {[
               { icon: Layers, t: 'Full project memory', d: 'Cover to changelog, auto-saved as you design.' },
               { icon: Shield, t: 'Your account, your cloud', d: 'Sign in to persist. Guest stays on this device only.' },
-              { icon: MessageSquare, t: 'Ask the hub anything', d: 'Bring your own API key. The assistant already knows your projects.' },
+              { icon: MessageSquare, t: 'Ask the hub anything', d: 'Bring your own Gemini or OpenAI key.' },
             ].map(item => (
               <li key={item.t} className="flex gap-3">
-                <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
+                <span className="mt-0.5 flex h-9 w-9 items-center justify-center bg-white/15 ring-1 ring-white/20">
                   <item.icon size={16} />
                 </span>
                 <div>
@@ -100,14 +140,14 @@ export function Login() {
         <p className="relative text-xs text-white/60">© Software Transformation Team · BELEG</p>
       </aside>
 
-      <div className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-[420px]">
+      <div className="flex items-center justify-center p-6 sm:p-10 overflow-y-auto">
+        <div className="w-full max-w-[420px] py-6">
           <div className="lg:hidden mb-8">
             <InfineonLogo />
           </div>
 
-          <div className="mb-7">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-ocean-50 px-2.5 py-1 text-xs text-primary mb-4">
+          <div className="mb-5">
+            <div className="inline-flex items-center gap-1.5 border border-border bg-muted px-2.5 py-1 text-xs text-primary mb-4">
               <Sparkles size={12} /> UX Project Hub
             </div>
             <h2 className="text-foreground mb-1">
@@ -120,14 +160,16 @@ export function Login() {
             </p>
           </div>
 
+          <ConnectSupabase />
+
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-xl text-xs text-destructive mb-4">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 text-xs text-destructive mb-4">
               <AlertCircle size={13} className="shrink-0 mt-0.5" />
               {error}
             </div>
           )}
           {info && (
-            <div className="px-3 py-2.5 bg-success/10 border border-success/20 rounded-xl text-xs text-success mb-4">
+            <div className="px-3 py-2.5 bg-success/10 border border-success/20 text-xs text-success mb-4">
               {info}
             </div>
           )}
@@ -138,7 +180,7 @@ export function Login() {
                 type="button"
                 onClick={handleGoogle}
                 disabled={googleLoading || !isSupabaseConfigured}
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 rounded-xl border border-border bg-card text-sm text-foreground hover:bg-muted hover:border-primary/40 transition-all disabled:opacity-50 shadow-sm"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 border border-border bg-card text-sm text-foreground hover:bg-muted hover:border-primary/40 transition-all disabled:opacity-50 shadow-sm"
                 style={{ fontWeight: 600 }}
               >
                 <GoogleIcon />
@@ -163,7 +205,7 @@ export function Login() {
                 <input
                   type="text" value={name} onChange={e => setName(e.target.value)}
                   placeholder="Your name" required
-                  className="w-full border border-border rounded-xl bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  className="w-full border border-border bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />
               </div>
             )}
@@ -173,7 +215,7 @@ export function Login() {
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="you@company.com" required
-                className="w-full border border-border rounded-xl bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className="w-full border border-border bg-card px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
               />
             </div>
 
@@ -185,7 +227,7 @@ export function Login() {
                     type={showPw ? 'text' : 'password'}
                     value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••" required minLength={6}
-                    className="w-full border border-border rounded-xl bg-card px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    className="w-full border border-border bg-card px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   />
                   <button type="button" onClick={() => setShowPw(p => !p)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
@@ -202,7 +244,7 @@ export function Login() {
             )}
 
             <button type="submit" disabled={loading}
-              className="w-full mt-1 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm transition-all hover:bg-ocean-600 disabled:opacity-50 shadow-sm"
+              className="w-full mt-1 py-2.5 bg-primary text-primary-foreground text-sm transition-all hover:bg-neutral-700 disabled:opacity-50 shadow-sm"
               style={{ fontWeight: 600 }}>
               {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
             </button>
@@ -225,7 +267,7 @@ export function Login() {
           <button
             type="button"
             onClick={continueAsGuest}
-            className="mt-6 w-full py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted border border-dashed border-border transition-all"
+            className="mt-6 w-full py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted border border-dashed border-border transition-all"
           >
             Continue as guest — work stays on this browser until you sign in
           </button>

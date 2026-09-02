@@ -200,7 +200,7 @@ export function Dashboard() {
             <div className="flex gap-1 flex-wrap">
               {FILTERS.map(f => (
                 <button key={f} onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-all border ${filter === f ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary hover:text-primary'}`}>
+                  className={`px-3 py-1.5 rounded text-xs transition-all border ${filter === f ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary hover:text-primary'}`}>
                   {f}
                 </button>
               ))}

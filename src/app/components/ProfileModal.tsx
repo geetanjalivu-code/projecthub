@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { getAiSettings, saveAiSettings } from '../lib/ai';
+import { getAiSettings, saveAiSettings, detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
 import { X, LogOut, User, Lock, Check, KeyRound, LogIn } from 'lucide-react';
 
 interface Props { onClose: () => void; }
@@ -20,7 +20,7 @@ export function ProfileModal({ onClose }: Props) {
   const ai = getAiSettings();
   const [apiKey, setApiKey] = useState(ai.apiKey);
   const [model, setModel] = useState(ai.model);
-  const [baseUrl, setBaseUrl] = useState(ai.baseUrl);
+  const [provider, setProvider] = useState<AiProvider>(ai.provider);
   const [aiSaved, setAiSaved] = useState(false);
 
   const providers = user?.app_metadata?.providers as string[] | undefined;
@@ -48,7 +48,9 @@ export function ProfileModal({ onClose }: Props) {
   };
 
   const saveAi = () => {
-    saveAiSettings({ apiKey, model, baseUrl });
+    const next = detectAiProvider(apiKey, provider);
+    saveAiSettings({ apiKey, model, provider: next });
+    setProvider(next);
     setAiSaved(true);
     setTimeout(() => setAiSaved(false), 2000);
   };
@@ -69,7 +71,7 @@ export function ProfileModal({ onClose }: Props) {
 
         <div className="px-6 py-5 space-y-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 ring-2 ring-ocean-100"
+            <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 ring-2 ring-muted"
               style={{ fontWeight: 600, fontSize: '1rem' }}>
               {(profile?.display_name ?? profile?.email ?? (isGuest ? 'G' : '?')).charAt(0).toUpperCase()}
             </div>
@@ -92,7 +94,7 @@ export function ProfileModal({ onClose }: Props) {
                   placeholder="Your name"
                   className="flex-1 border border-border rounded-xl bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary" />
                 <button onClick={saveName} disabled={saving || name === profile?.display_name}
-                  className="px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm transition-all hover:bg-ocean-600 disabled:opacity-40 flex items-center gap-1.5"
+                  className="px-3 py-2 bg-primary text-primary-foreground text-sm transition-all hover:bg-neutral-700 disabled:opacity-40 flex items-center gap-1.5"
                   style={{ fontWeight: 600 }}>
                   {saved ? <><Check size={13} /> Saved</> : saving ? 'Saving…' : 'Save'}
                 </button>
@@ -126,19 +128,30 @@ export function ProfileModal({ onClose }: Props) {
               <KeyRound size={13} className="text-muted-foreground" />
               <span className="text-xs text-muted-foreground uppercase tracking-widest">Hub Guide API key</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-2">Stored only in this browser. Used to answer questions about your projects.</p>
+            <p className="text-xs text-muted-foreground mb-2">Gemini (AIza…) or OpenAI (sk-…). Stored in this browser. Preferred model is tried first; the rest are fallbacks.</p>
             <div className="space-y-2">
-              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                placeholder="sk-…"
-                className="w-full border border-border rounded-xl bg-card px-3 py-2 text-sm" />
-              <input value={model} onChange={e => setModel(e.target.value)}
-                placeholder="gpt-4o-mini"
-                className="w-full border border-border rounded-xl bg-card px-3 py-2 text-xs" />
-              <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-                placeholder="https://api.openai.com/v1"
-                className="w-full border border-border rounded-xl bg-card px-3 py-2 text-xs" />
+              <input type="password" value={apiKey} onChange={e => {
+                setApiKey(e.target.value);
+                setProvider(detectAiProvider(e.target.value, provider));
+              }}
+                placeholder="AIza… or sk-…"
+                className="w-full border border-border bg-card px-3 py-2 text-sm" />
+              <select value={provider} onChange={e => {
+                const p = e.target.value as AiProvider;
+                setProvider(p);
+                setModel(p === 'gemini' ? GEMINI_MODELS[0] : OPENAI_MODELS[0]);
+              }} className="w-full border border-border bg-card px-3 py-2 text-xs">
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Gemini</option>
+              </select>
+              <select value={model} onChange={e => setModel(e.target.value)}
+                className="w-full border border-border bg-card px-3 py-2 text-xs">
+                {(provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
               <button onClick={saveAi}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-ocean-600"
+                className="px-4 py-2 bg-primary text-primary-foreground text-sm hover:bg-neutral-700"
                 style={{ fontWeight: 600 }}>
                 {aiSaved ? 'Key saved' : 'Save API key'}
               </button>

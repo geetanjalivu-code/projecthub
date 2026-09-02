@@ -91,26 +91,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const mapAuthError = (message: string | undefined | null) => {
+    const m = (message ?? '').toLowerCase();
+    if (!message) return null;
+    if (m.includes('email not confirmed')) {
+      return 'Email confirmation is still enabled. In Supabase go to Authentication → Providers → Email and turn Confirm email OFF, then sign in again. (Or open the confirmation email first.)';
+    }
+    if (m.includes('invalid login credentials')) {
+      return 'Wrong email or password. If you just signed up, create the account on the Sign up tab, or reset the password.';
+    }
+    if (m.includes('provider is not enabled') || m.includes('unsupported provider')) {
+      return 'Google is not enabled. In Supabase: Authentication → Providers → Google → enable it, paste the Google Cloud Client ID and Client secret, then add this site URL under Authentication → URL configuration → Redirect URLs.';
+    }
+    if (m.includes('failed to fetch') || m.includes('network')) {
+      return 'Cannot reach Supabase. Check VITE_SUPABASE_URL in `.env` (or the Connect Supabase fields) and that the project is not paused.';
+    }
+    return message;
+  };
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    return { error: mapAuthError(error?.message) };
   };
 
   const signUp = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
+    const trimmed = email.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmed,
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: name.trim() },
         emailRedirectTo: window.location.origin,
       },
     });
-    return { error: error?.message ?? null };
+    if (data.session) return { error: null };
+
+    const already = (error?.message ?? '').toLowerCase().includes('already registered');
+    if (!error || already) {
+      const second = await supabase.auth.signInWithPassword({ email: trimmed, password });
+      if (second.data.session) return { error: null };
+      if (second.error) return { error: mapAuthError(second.error.message) };
+    }
+
+    if (data.user && !data.session) {
+      return {
+        error: mapAuthError('Email not confirmed'),
+      };
+    }
+    return { error: mapAuthError(error?.message) };
   };
 
   const signInWithGoogle = async () => {
     if (!isSupabaseConfigured) {
-      return { error: 'Supabase is not configured. You can continue as a guest.' };
+      return { error: 'Add your Supabase URL and anon key first (Connect Supabase on this page, or `.env`).' };
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -119,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryParams: { access_type: 'offline', prompt: 'select_account' },
       },
     });
-    return { error: error?.message ?? null };
+    return { error: mapAuthError(error?.message) };
   };
 
   const continueAsGuest = () => {

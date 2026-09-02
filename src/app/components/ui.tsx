@@ -245,9 +245,9 @@ export function BtnPrimary({ onClick, children, disabled, className = '', type =
 }) {
   return (
     <button type={type} onClick={onClick} disabled={disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl transition-all
+      className={`inline-flex items-center gap-2 px-4 py-2 text-sm rounded transition-all
         bg-primary text-primary-foreground shadow-sm
-        hover:bg-ocean-600 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+        hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
       style={{ fontWeight: 600 }}>
       {children}
     </button>
@@ -259,9 +259,9 @@ export function BtnSecondary({ onClick, children, disabled, className = '' }: {
 }) {
   return (
     <button onClick={onClick} disabled={disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl transition-colors
+      className={`inline-flex items-center gap-2 px-4 py-2 text-sm rounded transition-colors
         bg-card text-primary border border-primary
-        hover:bg-ocean-50 disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
+        hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
       style={{ fontWeight: 600 }}>
       {children}
     </button>
@@ -420,7 +420,7 @@ export function Avatar({ name, size = 7 }: { name: string; size?: number }) {
   const initials = name.trim().split(/\s+/).map(w => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') || '?';
   return (
     <span style={{ width: `${size * 4}px`, height: `${size * 4}px`, fontWeight: 600 }}
-      className="rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shrink-0 ring-2 ring-ocean-100">
+      className="rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs shrink-0 ring-2 ring-muted">
       {initials}
     </span>
   );

@@ -107,72 +107,85 @@ export function buildHubContext(projects: Project[], currentProjectId: string | 
 
 const KEY = 'uxHub_ai_key';
 const MODEL_KEY = 'uxHub_ai_model';
-const BASE_KEY = 'uxHub_ai_base';
+const PROVIDER_KEY = 'uxHub_ai_provider';
+
+export type AiProvider = 'openai' | 'gemini';
+
+export const OPENAI_MODELS = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'gpt-4.1-nano',
+  'o4-mini',
+  'gpt-4-turbo',
+  'gpt-3.5-turbo',
+];
+
+export const GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-flash-latest',
+  'gemini-pro-latest',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash',
+];
+
+export function detectAiProvider(apiKey: string, explicit?: AiProvider | ''): AiProvider {
+  const k = apiKey.trim();
+  if (k.startsWith('AIza')) return 'gemini';
+  if (k.startsWith('sk-')) return 'openai';
+  if (explicit === 'gemini' || explicit === 'openai') return explicit;
+  return 'openai';
+}
 
 export function getAiSettings() {
+  const apiKey = localStorage.getItem(KEY) ?? '';
+  const storedProvider = localStorage.getItem(PROVIDER_KEY) as AiProvider | null;
+  const provider = detectAiProvider(apiKey, storedProvider ?? '');
+  const fallback = provider === 'gemini' ? GEMINI_MODELS[0] : OPENAI_MODELS[0];
   return {
-    apiKey: localStorage.getItem(KEY) ?? '',
-    model: localStorage.getItem(MODEL_KEY) || 'gpt-4o-mini',
-    baseUrl: (localStorage.getItem(BASE_KEY) || 'https://api.openai.com/v1').replace(/\/$/, ''),
+    apiKey,
+    provider,
+    model: localStorage.getItem(MODEL_KEY) || fallback,
   };
 }
 
-export function saveAiSettings(s: { apiKey?: string; model?: string; baseUrl?: string }) {
+export function saveAiSettings(s: { apiKey?: string; model?: string; provider?: AiProvider }) {
   if (s.apiKey !== undefined) {
     if (s.apiKey.trim()) localStorage.setItem(KEY, s.apiKey.trim());
     else localStorage.removeItem(KEY);
   }
-  if (s.model !== undefined) localStorage.setItem(MODEL_KEY, s.model.trim() || 'gpt-4o-mini');
-  if (s.baseUrl !== undefined) localStorage.setItem(BASE_KEY, s.baseUrl.trim() || 'https://api.openai.com/v1');
+  if (s.provider) localStorage.setItem(PROVIDER_KEY, s.provider);
+  if (s.model !== undefined) localStorage.setItem(MODEL_KEY, s.model.trim());
 }
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string };
 
-export async function streamHubChat(opts: {
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  contextJson: string;
-  history: ChatTurn[];
-  question: string;
-  onDelta: (chunk: string) => void;
-  signal?: AbortSignal;
-}): Promise<void> {
-  const res = await fetch(`${opts.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    signal: opts.signal,
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: HUB_SYSTEM_INSTRUCTIONS },
-        {
-          role: 'system',
-          content: `Live hub data (JSON). Treat this as ground truth for the designer's projects:\n${opts.contextJson}`,
-        },
-        ...opts.history.slice(-8),
-        { role: 'user', content: opts.question },
-      ],
-    }),
-  });
+function uniqueModels(preferred: string, catalog: string[]) {
+  return [preferred, ...catalog.filter(m => m !== preferred)];
+}
 
-  if (!res.ok) {
-    const err = await res.text();
-    if (res.status === 401) throw new Error('That API key was rejected. Check it in Account settings.');
-    if (res.status === 429) throw new Error('The model is rate-limited. Try again in a moment.');
-    throw new Error(err.slice(0, 280) || `Request failed (${res.status})`);
-  }
+function toGeminiContents(history: ChatTurn[], question: string) {
+  const contents = history.slice(-8).map(t => ({
+    role: t.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: t.content }],
+  }));
+  contents.push({ role: 'user', parts: [{ text: question }] });
+  return contents;
+}
 
+async function readSseText(res: Response, onDelta: (chunk: string) => void, pick: (json: any) => string | undefined) {
   const reader = res.body?.getReader();
   if (!reader) throw new Error('No response stream.');
   const decoder = new TextDecoder();
   let buffer = '';
-
+  let got = false;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -183,14 +196,131 @@ export async function streamHubChat(opts: {
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
       const data = trimmed.slice(5).trim();
-      if (data === '[DONE]') return;
+      if (!data || data === '[DONE]') continue;
       try {
-        const json = JSON.parse(data);
-        const piece = json.choices?.[0]?.delta?.content;
-        if (piece) opts.onDelta(piece);
-      } catch {
-        /* ignore partial JSON */
-      }
+        const piece = pick(JSON.parse(data));
+        if (piece) { got = true; onDelta(piece); }
+      } catch { /* ignore */ }
     }
   }
+  return got;
+}
+
+async function openaiOnce(opts: {
+  apiKey: string; model: string; contextJson: string; history: ChatTurn[]; question: string;
+  onDelta: (c: string) => void; signal?: AbortSignal;
+}) {
+  const body = {
+    model: opts.model,
+    temperature: 0.3,
+    messages: [
+      { role: 'system', content: HUB_SYSTEM_INSTRUCTIONS },
+      { role: 'system', content: `Live hub data (JSON). Treat this as ground truth for the designer's projects:\n${opts.contextJson}` },
+      ...opts.history.slice(-8),
+      { role: 'user', content: opts.question },
+    ],
+  };
+
+  const streamRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+    signal: opts.signal,
+    body: JSON.stringify({ ...body, stream: true }),
+  });
+  if (streamRes.ok) {
+    const got = await readSseText(streamRes, opts.onDelta, json => json.choices?.[0]?.delta?.content);
+    if (got) return;
+  }
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+    signal: opts.signal,
+    body: JSON.stringify({ ...body, stream: false }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`${opts.model}: ${err.slice(0, 180) || res.status}`);
+  }
+  const json = await res.json();
+  const text = json.choices?.[0]?.message?.content;
+  if (!text) throw new Error(`${opts.model}: empty response`);
+  opts.onDelta(text);
+}
+
+async function geminiOnce(opts: {
+  apiKey: string; model: string; contextJson: string; history: ChatTurn[]; question: string;
+  onDelta: (c: string) => void; signal?: AbortSignal;
+}) {
+  const payload = {
+    systemInstruction: {
+      parts: [{ text: `${HUB_SYSTEM_INSTRUCTIONS}\n\nLive hub data (JSON):\n${opts.contextJson}` }],
+    },
+    contents: toGeminiContents(opts.history, opts.question),
+    generationConfig: { temperature: 0.3 },
+  };
+
+  const streamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(opts.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(opts.apiKey)}`;
+  const streamRes = await fetch(streamUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: opts.signal,
+    body: JSON.stringify(payload),
+  });
+  if (streamRes.ok) {
+    const got = await readSseText(streamRes, opts.onDelta, json => json.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join('') ?? '');
+    if (got) return;
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(opts.model)}:generateContent?key=${encodeURIComponent(opts.apiKey)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: opts.signal,
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`${opts.model}: ${err.slice(0, 180) || res.status}`);
+  }
+  const json = await res.json();
+  const text = json.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join('');
+  if (!text) throw new Error(`${opts.model}: empty response`);
+  opts.onDelta(text);
+}
+
+export async function streamHubChat(opts: {
+  apiKey: string;
+  model: string;
+  provider?: AiProvider;
+  contextJson: string;
+  history: ChatTurn[];
+  question: string;
+  onDelta: (chunk: string) => void;
+  onModel?: (model: string) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const provider = detectAiProvider(opts.apiKey, opts.provider);
+  const catalog = provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
+  const queue = uniqueModels(opts.model || catalog[0], catalog);
+  const errors: string[] = [];
+
+  for (const model of queue) {
+    if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      opts.onModel?.(model);
+      if (provider === 'gemini') await geminiOnce({ ...opts, model });
+      else await openaiOnce({ ...opts, model });
+      return;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
+      errors.push((e as Error).message || String(e));
+    }
+  }
+
+  const last = errors[errors.length - 1] || '';
+  if (last.toLowerCase().includes('401') || last.toLowerCase().includes('api key') || last.toLowerCase().includes('invalid')) {
+    throw new Error('That API key was rejected. Check the key and that it matches OpenAI (sk-…) or Gemini (AIza…).');
+  }
+  throw new Error(`Every ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} model failed. Last error: ${last.slice(0, 220)}`);
 }

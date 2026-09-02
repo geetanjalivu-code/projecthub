@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, KeyRound, Send, Sparkles, X, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
-import { buildHubContext, getAiSettings, saveAiSettings, streamHubChat, ChatTurn } from '../lib/ai';
+import { buildHubContext, getAiSettings, saveAiSettings, streamHubChat, ChatTurn, detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
 
 const SUGGESTIONS = [
   'What can we do with the Project Hub?',
@@ -16,8 +16,9 @@ export function AiAssistant() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
-  const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
+  const [provider, setProvider] = useState<AiProvider>('openai');
   const [hasKey, setHasKey] = useState(false);
+  const [activeModel, setActiveModel] = useState('');
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function AiAssistant() {
     const s = getAiSettings();
     setApiKey(s.apiKey);
     setModel(s.model);
-    setBaseUrl(s.baseUrl);
+    setProvider(s.provider);
     setHasKey(!!s.apiKey);
   };
 
@@ -40,7 +41,9 @@ export function AiAssistant() {
   }, [turns, busy, open]);
 
   const persistKey = () => {
-    saveAiSettings({ apiKey, model, baseUrl });
+    const nextProvider = detectAiProvider(apiKey, provider);
+    saveAiSettings({ apiKey, model, provider: nextProvider });
+    setProvider(nextProvider);
     setHasKey(!!apiKey.trim());
     setSettingsOpen(false);
     setError(null);
@@ -52,7 +55,7 @@ export function AiAssistant() {
     const s = getAiSettings();
     if (!s.apiKey) {
       setSettingsOpen(true);
-      setError('Add your own OpenAI-compatible API key to talk to Hub Guide.');
+      setError('Add your Gemini or OpenAI API key to talk to Hub Guide.');
       return;
     }
     setInput('');
@@ -66,11 +69,12 @@ export function AiAssistant() {
       await streamHubChat({
         apiKey: s.apiKey,
         model: s.model,
-        baseUrl: s.baseUrl,
+        provider: s.provider,
         contextJson: buildHubContext(projects, currentProjectId),
         history: turns,
         question: q,
         signal: ac.signal,
+        onModel: setActiveModel,
         onDelta: chunk => {
           setTurns(prev => {
             const next = [...prev];
@@ -99,7 +103,7 @@ export function AiAssistant() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground pl-3 pr-4 py-2.5 shadow-lg hover:bg-ocean-600 transition-all"
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-primary text-primary-foreground pl-3 pr-4 py-2.5 shadow-lg hover:bg-neutral-700 transition-all"
         style={{ fontWeight: 600 }}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15">
@@ -112,8 +116,8 @@ export function AiAssistant() {
         <div className="fixed inset-0 z-50 flex items-end justify-end sm:p-5 p-0">
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
           <div className="relative w-full sm:max-w-[420px] h-[min(720px,100vh)] sm:h-[min(720px,calc(100vh-2.5rem))] bg-card border border-border sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
-            <header className="px-4 py-3 border-b border-border flex items-center gap-3 bg-gradient-to-r from-ocean-50 to-card">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <header className="px-4 py-3 border-b border-border flex items-center gap-3 bg-muted/50">
+              <span className="flex h-9 w-9 items-center justify-center bg-primary text-primary-foreground">
                 <Bot size={16} />
               </span>
               <div className="min-w-0 flex-1">
@@ -137,21 +141,34 @@ export function AiAssistant() {
 
             {settingsOpen && (
               <div className="px-4 py-3 border-b border-border bg-muted/40 space-y-2">
-                <p className="text-xs text-muted-foreground">Your key stays in this browser. It is never uploaded to the hub.</p>
+                <p className="text-xs text-muted-foreground">Your key stays in this browser. Gemini keys usually start with AIza; OpenAI with sk-. Preferred model is tried first; others are used automatically until one works.</p>
                 <input
                   type="password"
                   value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="sk-… OpenAI or compatible key"
-                  className="w-full border border-border rounded-xl bg-card px-3 py-2 text-sm"
+                  onChange={e => {
+                    setApiKey(e.target.value);
+                    setProvider(detectAiProvider(e.target.value, provider));
+                  }}
+                  placeholder="Gemini AIza… or OpenAI sk-…"
+                  className="w-full border border-border bg-card px-3 py-2 text-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={model} onChange={e => setModel(e.target.value)} placeholder="gpt-4o-mini"
-                    className="border border-border rounded-xl bg-card px-3 py-2 text-xs" />
-                  <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1"
-                    className="border border-border rounded-xl bg-card px-3 py-2 text-xs" />
+                  <select value={provider} onChange={e => {
+                    const p = e.target.value as AiProvider;
+                    setProvider(p);
+                    setModel(p === 'gemini' ? GEMINI_MODELS[0] : OPENAI_MODELS[0]);
+                  }} className="border border-border bg-card px-3 py-2 text-xs">
+                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                  <select value={model} onChange={e => setModel(e.target.value)}
+                    className="border border-border bg-card px-3 py-2 text-xs">
+                    {(provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
-                <button onClick={persistKey} className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-xs" style={{ fontWeight: 600 }}>
+                <button onClick={persistKey} className="w-full py-2 bg-primary text-primary-foreground text-xs" style={{ fontWeight: 600 }}>
                   Save key
                 </button>
               </div>
@@ -167,7 +184,7 @@ export function AiAssistant() {
                   <div className="flex flex-col gap-2">
                     {SUGGESTIONS.map(s => (
                       <button key={s} onClick={() => ask(s)}
-                        className="text-left text-xs px-3 py-2 rounded-xl border border-border hover:border-primary hover:bg-ocean-50 transition-all">
+                        className="text-left text-xs px-3 py-2 border border-border hover:border-primary hover:bg-muted transition-all">
                         {s}
                       </button>
                     ))}
@@ -181,7 +198,7 @@ export function AiAssistant() {
                       ? 'bg-primary text-primary-foreground rounded-br-md'
                       : 'bg-muted text-foreground rounded-bl-md'
                   }`}>
-                    {t.content || (busy && i === turns.length - 1 ? 'Thinking…' : '')}
+                    {t.content || (busy && i === turns.length - 1 ? `Trying ${activeModel || 'models'}…` : '')}
                   </div>
                 </div>
               ))}
@@ -199,10 +216,10 @@ export function AiAssistant() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder="Ask about a project…"
-                className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="flex-1 border border-border px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
               <button type="submit" disabled={busy || !input.trim()}
-                className="h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:bg-ocean-600">
+                className="h-10 w-10 bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:bg-neutral-700">
                 <Send size={14} />
               </button>
             </form>

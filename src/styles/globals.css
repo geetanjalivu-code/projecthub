@@ -1,14 +1,9 @@
-/*──────────────────────────────────────────────────────────────────────────────
-   UX Project Hub — Infineon ocean tokens, product-grade surfaces
-────────────────────────────────────────────────────────────────────────────── */
+/* UX Project Hub — charcoal primary, 4px controls */
 
 :root {
-  --ocean-50:  #DFF4F3;
-  --ocean-100: #DFF4F3;
-  --ocean-200: #b7e3df;
-  --ocean-500: #0A8276;
-  --ocean-600: #08665C;
-  --ocean-700: #06534B;
+  --brand: #47464a;
+  --brand-hover: #3C3A39;
+  --brand-muted: #f4f4f5;
 
   --engineering-100: #F7F7F7;
   --engineering-200: #EEEDED;
@@ -27,8 +22,15 @@
   --neutral-600:  #3C3A39;
   --neutral-700:  #2a2929;
   --neutral-800:  #1D1D1D;
-  --neutral-900:  #0A8276;
+  --neutral-900:  #47464a;
   --neutral-950:  #1D1D1D;
+
+  --ocean-50:  #f4f4f5;
+  --ocean-100: #f4f4f5;
+  --ocean-200: #EEEDED;
+  --ocean-500: #47464a;
+  --ocean-600: #3C3A39;
+  --ocean-700: #1D1D1D;
 
   --color-blue:    #3b82f6;
   --color-amber:   #d97706;
@@ -39,36 +41,36 @@
   --foreground:             var(--ink);
   --card:                   #ffffff;
   --card-foreground:        var(--ink);
-  --primary:                var(--ocean-500);
+  --primary:                #47464a;
   --primary-foreground:     #ffffff;
-  --secondary:              var(--ocean-50);
-  --secondary-foreground:   var(--ocean-700);
+  --secondary:              var(--brand-muted);
+  --secondary-foreground:   var(--ink);
   --muted:                  #f3f4f4;
   --muted-foreground:       var(--engineering-500);
-  --accent:                 var(--ocean-50);
-  --accent-foreground:      var(--ocean-700);
+  --accent:                 var(--brand-muted);
+  --accent-foreground:      var(--ink);
   --border:                 var(--engineering-200);
   --input:                  #ffffff;
   --input-background:       #ffffff;
-  --ring:                   var(--ocean-500);
+  --ring:                   #47464a;
   --destructive:            var(--color-red);
   --destructive-foreground: #ffffff;
 
   --sidebar:                      #ffffff;
   --sidebar-foreground:           var(--engineering-600);
-  --sidebar-primary:              var(--ocean-500);
+  --sidebar-primary:              #47464a;
   --sidebar-primary-foreground:   #ffffff;
-  --sidebar-accent:               var(--ocean-50);
-  --sidebar-accent-foreground:    var(--ocean-700);
+  --sidebar-accent:               var(--brand-muted);
+  --sidebar-accent-foreground:    var(--ink);
   --sidebar-border:               var(--engineering-200);
-  --sidebar-active-bg:            var(--ocean-50);
-  --sidebar-active-fg:            var(--ocean-700);
+  --sidebar-active-bg:            var(--brand-muted);
+  --sidebar-active-fg:            var(--ink);
 
   --success:  var(--color-emerald);
   --warning:  var(--color-amber);
 
   --font-family-base: 'Inter', 'Segoe UI', 'Source Sans 3', Arial, system-ui, sans-serif;
-  --radius: 0.75rem;
+  --radius: 4px;
 }
 
 @theme inline {
@@ -93,10 +95,10 @@
   --color-neutral-950: var(--neutral-950);
   --color-sidebar-active-bg: var(--sidebar-active-bg);
   --color-sidebar-active-fg: var(--sidebar-active-fg);
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
 }
 
 body {
@@ -122,17 +124,20 @@ h4 { font-size: 1rem;     font-weight: 600; line-height: 1.5rem;   letter-spacin
   outline-offset: 2px;
 }
 
+button {
+  border-radius: 4px;
+}
+
 .hub-mesh {
   background-image:
-    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.28), transparent 42%),
-    radial-gradient(circle at 82% 78%, rgba(6,83,75,0.45), transparent 50%),
-    linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.08) 100%);
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.16), transparent 42%),
+    radial-gradient(circle at 82% 78%, rgba(0,0,0,0.35), transparent 50%);
 }
 
 .hub-page-glow {
   background-image:
-    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(10, 130, 118, 0.08), transparent 50%),
-    radial-gradient(ellipse 60% 40% at -10% 0%, rgba(10, 130, 118, 0.05), transparent 45%);
+    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(71, 70, 74, 0.06), transparent 50%),
+    radial-gradient(ellipse 60% 40% at -10% 0%, rgba(71, 70, 74, 0.04), transparent 45%);
 }
 
 .glass-header {
