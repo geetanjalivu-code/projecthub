@@ -245,6 +245,7 @@ export function Login() {
               style={{ fontWeight: 600 }}>
               {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
             </button>
+            <p className="relative text-xs text-muted-foreground">Note: By proceeding, you consent to process your data with Supabase.</p>
           </form>
 
           <div className="mt-5 pt-5 border-t border-border text-center text-xs text-muted-foreground">
