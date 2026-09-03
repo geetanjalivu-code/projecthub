@@ -1,11 +1,6 @@
 
-  # UX Project maintenance
+  # Project Hub
 
-  This is a code bundle for UX Project maintenance. The original project is available at https://www.figma.com/design/T4oVVfA2Zdf6zkmOiz86ZS/UX-Project-maintenance.
+  This is a code bundle for a project hub - which is a documentation tool to maintain all documentation related to a digital project. It also has an AI assistant which fetches and displays any info related to any project on the hub - Now giving KTs and understanding projects is a very easy task.
 
-  ## Running the code
 
-  Run `npm i` to install the dependencies.
-
-  Run `npm run dev` to start the development server.
-  
