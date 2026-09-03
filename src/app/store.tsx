@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { Project, ChangelogEntry } from './types';
 import {
-  loadGuestProjects, saveGuestProjects, clearGuestProjects, clearUserProjectCache,
-  calcProgress, nowISO, nowLabel, uid, versionStr, bumpVersion,
+  saveGuestProjects, saveUserProjectsLocal, loadUserProjectsLocal, loadGuestProjects,
+  clearGuestProjects, mergeProjectLists, unwrapProject, uid,
+  calcProgress, nowISO, nowLabel, versionStr, bumpVersion,
 } from './utils';
 import { supabase, isSupabaseConfigured, DbProject } from './lib/supabase';
 import { useAuth } from './auth/AuthProvider';
 import { ImportGuestModal } from './components/ImportGuestModal';
+import { guestAiHasKey, clearGuestAi } from './lib/ai';
+import { importGuestAiToUser } from './ai/AiSettingsProvider';
 
 interface StoreState {
   projects: Project[];
@@ -60,12 +63,18 @@ async function loadFromSupabase(userId: string): Promise<Project[]> {
     .select('*')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
-  if (error || !data) return [];
-  return (data as DbProject[]).map(row => row.data as Project).filter(Boolean);
+  if (error) {
+    console.error('Failed to load projects from cloud:', error.message);
+    return [];
+  }
+  if (!data) return [];
+  return (data as DbProject[])
+    .map(row => unwrapProject(row.data) ?? unwrapProject(row))
+    .filter((p): p is Project => !!p);
 }
 
-async function upsertToSupabase(userId: string, projects: Project[]) {
-  if (projects.length === 0) return;
+async function upsertToSupabase(userId: string, projects: Project[]): Promise<string | null> {
+  if (projects.length === 0) return null;
   const rows = projects.map(p => ({
     id: p.id,
     user_id: userId,
@@ -73,7 +82,12 @@ async function upsertToSupabase(userId: string, projects: Project[]) {
     data: p as unknown,
     updated_at: new Date().toISOString(),
   }));
-  await supabase.from('projects').upsert(rows);
+  const { error } = await supabase.from('projects').upsert(rows, { onConflict: 'user_id,id' });
+  if (error) {
+    console.error('Failed to save projects to cloud:', error.message);
+    return error.message;
+  }
+  return null;
 }
 
 async function deleteFromSupabase(userId: string, projectId: string) {
@@ -82,66 +96,120 @@ async function deleteFromSupabase(userId: string, projectId: string) {
 
 const empty: StoreState = { projects: [], currentProjectId: null, saving: false };
 
+let flushPending: () => Promise<void> = async () => {};
+export async function flushHubSaves() {
+  await flushPending();
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isGuest, passwordRecovery } = useAuth();
   const [state, dispatch] = useReducer(reducer, empty);
-  const [guestImport, setGuestImport] = useState<Project[] | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [guestImport, setGuestImport] = useState<{ projects: Project[]; hasAi: boolean } | null>(null);
 
   const userRef = useRef(user);
   const authRef = useRef(isAuthenticated);
   const guestRef = useRef(isGuest);
   const wasAuth = useRef(false);
+  const projectsRef = useRef<Project[]>([]);
+  const remoteRef = useRef<Project[]>([]);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => { authRef.current = isAuthenticated; }, [isAuthenticated]);
   useEffect(() => { guestRef.current = isGuest; }, [isGuest]);
+  useEffect(() => { projectsRef.current = state.projects; }, [state.projects]);
 
-  const remoteRef = useRef<Project[]>([]);
+  const writeNow = useCallback(async (projects: Project[]) => {
+    const u = userRef.current;
+    if (authRef.current && u) {
+      saveUserProjectsLocal(u.id, projects);
+      if (isSupabaseConfigured) {
+        const err = await upsertToSupabase(u.id, projects);
+        setSaveError(err);
+      }
+    } else if (guestRef.current) {
+      saveGuestProjects(projects);
+    }
+  }, []);
+
+  const persist = useCallback((projects: Project[]) => {
+    projectsRef.current = projects;
+    dispatch({ type: 'SET_SAVING', saving: true });
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      await writeNow(projects);
+      dispatch({ type: 'SET_SAVING', saving: false });
+    }, 400);
+  }, [writeNow]);
+
+  const flush = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await writeNow(projectsRef.current);
+    dispatch({ type: 'SET_SAVING', saving: false });
+  }, [writeNow]);
+
+  useEffect(() => {
+    flushPending = flush;
+    const onHide = () => { if (document.hidden) void flush(); };
+    window.addEventListener('beforeunload', () => { void flush(); });
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [flush]);
 
   useEffect(() => {
     if (passwordRecovery) return;
 
     if (wasAuth.current && !isAuthenticated) {
       dispatch({ type: 'RESET' });
-      clearUserProjectCache();
       remoteRef.current = [];
+      projectsRef.current = [];
+      setSaveError(null);
+      setGuestImport(null);
     }
     wasAuth.current = isAuthenticated;
 
     if (isAuthenticated && user) {
-      dispatch({ type: 'RESET' });
-      clearUserProjectCache();
-      const pendingGuest = loadGuestProjects();
-      loadFromSupabase(user.id).then(remote => {
-        remoteRef.current = remote;
-        dispatch({ type: 'SET_PROJECTS', projects: remote });
-        if (pendingGuest.length > 0) setGuestImport(pendingGuest);
+      const mine = loadUserProjectsLocal(user.id);
+      projectsRef.current = mine;
+      dispatch({ type: 'SET_PROJECTS', projects: mine });
+
+      const guestLeft = loadGuestProjects();
+      const hasAi = guestAiHasKey();
+      if (guestLeft.length > 0 || hasAi) {
+        setGuestImport({ projects: guestLeft, hasAi });
+      } else {
+        setGuestImport(null);
+      }
+
+      if (!isSupabaseConfigured) return;
+
+      void loadFromSupabase(user.id).then(async remote => {
+        const merged = mergeProjectLists(mine, remote);
+        remoteRef.current = merged;
+        projectsRef.current = merged;
+        dispatch({ type: 'SET_PROJECTS', projects: merged });
+        saveUserProjectsLocal(user.id, merged);
+        const err = await upsertToSupabase(user.id, merged);
+        setSaveError(err);
       });
       return;
     }
 
     if (isGuest) {
-      dispatch({ type: 'SET_PROJECTS', projects: loadGuestProjects() });
+      const local = loadGuestProjects();
+      projectsRef.current = local;
+      dispatch({ type: 'SET_PROJECTS', projects: local });
       dispatch({ type: 'SET_CURRENT', id: null });
       return;
     }
 
     dispatch({ type: 'RESET' });
+    projectsRef.current = [];
   }, [user?.id, isAuthenticated, isGuest, passwordRecovery]);
-
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const persist = useCallback((projects: Project[]) => {
-    dispatch({ type: 'SET_SAVING', saving: true });
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      const u = userRef.current;
-      if (authRef.current && u && isSupabaseConfigured) {
-        await upsertToSupabase(u.id, projects);
-      } else if (guestRef.current) {
-        saveGuestProjects(projects);
-      }
-      dispatch({ type: 'SET_SAVING', saving: false });
-    }, 800);
-  }, []);
 
   const currentProject = state.projects.find(p => p.id === state.currentProjectId) ?? null;
 
@@ -152,36 +220,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }), []);
 
   const addProject = useCallback((p: Project) => {
+    const updated = [...projectsRef.current, p];
     dispatch({ type: 'ADD_PROJECT', project: p });
-    persist([...state.projects, p]);
+    persist(updated);
     dispatch({ type: 'SET_CURRENT', id: p.id });
-  }, [state.projects, persist]);
+  }, [persist]);
 
   const deleteProject = useCallback(async (id: string) => {
     dispatch({ type: 'DELETE_PROJECT', id });
-    const updated = state.projects.filter(p => p.id !== id);
+    const updated = projectsRef.current.filter(p => p.id !== id);
+    projectsRef.current = updated;
     const u = userRef.current;
-    if (isSupabaseConfigured && authRef.current && u) {
-      await deleteFromSupabase(u.id, id);
+    if (authRef.current && u) {
+      saveUserProjectsLocal(u.id, updated);
+      if (isSupabaseConfigured) await deleteFromSupabase(u.id, id);
     } else if (guestRef.current) {
       saveGuestProjects(updated);
     }
-  }, [state.projects]);
+  }, []);
 
   const openProject  = useCallback((id: string) => dispatch({ type: 'SET_CURRENT', id }), []);
   const closeProject = useCallback(() => dispatch({ type: 'SET_CURRENT', id: null }), []);
 
   const updateSection = useCallback((sectionKey: keyof Project['sections'], data: unknown) => {
-    if (!currentProject) return;
+    const current = projectsRef.current.find(p => p.id === state.currentProjectId);
+    if (!current) return;
     const updated = touch({
-      ...currentProject,
-      sections: { ...currentProject.sections, [sectionKey]: data },
+      ...current,
+      sections: { ...current.sections, [sectionKey]: data },
     });
     dispatch({ type: 'UPDATE_PROJECT', project: updated });
-    persist(state.projects.map(p => p.id === updated.id ? updated : p));
-  }, [currentProject, state.projects, touch, persist]);
+    persist(projectsRef.current.map(p => p.id === updated.id ? updated : p));
+  }, [state.currentProjectId, touch, persist]);
 
   const updateMeta = useCallback((fields: Partial<Pick<Project, 'name' | 'status' | 'phase'>>) => {
+    const currentProject = projectsRef.current.find(p => p.id === state.currentProjectId);
     if (!currentProject) return;
     const prev = { status: currentProject.status, phase: currentProject.phase };
     const updated = touch({ ...currentProject, ...fields });
@@ -198,10 +271,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       changelog: [...entries.map(e => ({ ...e, id: uid() })), ...updated.changelog],
     };
     dispatch({ type: 'UPDATE_PROJECT', project: withLog });
-    persist(state.projects.map(p => p.id === withLog.id ? withLog : p));
-  }, [currentProject, state.projects, touch, persist]);
+    persist(projectsRef.current.map(p => p.id === withLog.id ? withLog : p));
+  }, [state.currentProjectId, touch, persist]);
 
   const bumpProjectVersion = useCallback((type: 'MAJOR' | 'MINOR' | 'PATCH', category: string, description: string, screens: string) => {
+    const currentProject = projectsRef.current.find(p => p.id === state.currentProjectId);
     if (!currentProject) return;
     const newVersion = bumpVersion(currentProject.version, type);
     const entry: ChangelogEntry = {
@@ -214,32 +288,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       changelog: [entry, ...currentProject.changelog],
     });
     dispatch({ type: 'UPDATE_PROJECT', project: updated });
-    persist(state.projects.map(p => p.id === updated.id ? updated : p));
-  }, [currentProject, state.projects, touch, persist]);
+    persist(projectsRef.current.map(p => p.id === updated.id ? updated : p));
+  }, [state.currentProjectId, touch, persist]);
 
   const addChangelogEntry = useCallback((entry: Omit<ChangelogEntry, 'id'>) => {
+    const currentProject = projectsRef.current.find(p => p.id === state.currentProjectId);
     if (!currentProject) return;
     const full: ChangelogEntry = { ...entry, id: uid() };
     const updated = touch({ ...currentProject, changelog: [full, ...currentProject.changelog] });
     dispatch({ type: 'UPDATE_PROJECT', project: updated });
-    persist(state.projects.map(p => p.id === updated.id ? updated : p));
-  }, [currentProject, state.projects, touch, persist]);
-
-  const importGuest = async () => {
-    if (!guestImport || !user) { setGuestImport(null); clearGuestProjects(); return; }
-    const cloned = guestImport.map(p => ({ ...p, id: uid() }));
-    const merged = [...cloned, ...remoteRef.current];
-    remoteRef.current = merged;
-    dispatch({ type: 'SET_PROJECTS', projects: merged });
-    await upsertToSupabase(user.id, cloned);
-    clearGuestProjects();
-    setGuestImport(null);
-  };
-
-  const discardGuest = () => {
-    clearGuestProjects();
-    setGuestImport(null);
-  };
+    persist(projectsRef.current.map(p => p.id === updated.id ? updated : p));
+  }, [state.currentProjectId, touch, persist]);
 
   return (
     <Ctx.Provider value={{
@@ -251,11 +310,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateSection, updateMeta, bumpProjectVersion, addChangelogEntry,
     }}>
       {children}
-      {guestImport && guestImport.length > 0 && (
+      {saveError && (
+        <div className="fixed top-3 left-1/2 z-[80] max-w-lg -translate-x-1/2 rounded border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-900 shadow-sm">
+          Could not save to the cloud: {saveError}. Your work is still kept on this device.
+        </div>
+      )}
+      {guestImport && (
         <ImportGuestModal
-          count={guestImport.length}
-          onImport={importGuest}
-          onDiscard={discardGuest}
+          projectCount={guestImport.projects.length}
+          hasAiKey={guestImport.hasAi}
+          onImport={async () => {
+            if (!user) { setGuestImport(null); return; }
+            const cloned = guestImport.projects.map(p => ({ ...p, id: uid() }));
+            const merged = mergeProjectLists(cloned, projectsRef.current);
+            remoteRef.current = merged;
+            projectsRef.current = merged;
+            dispatch({ type: 'SET_PROJECTS', projects: merged });
+            saveUserProjectsLocal(user.id, merged);
+            if (cloned.length > 0 && isSupabaseConfigured) {
+              const err = await upsertToSupabase(user.id, merged);
+              setSaveError(err);
+            }
+            if (guestImport.hasAi) {
+              await importGuestAiToUser(user.id);
+              window.dispatchEvent(new Event('uxhub:ai-reload'));
+            }
+            clearGuestProjects();
+            clearGuestAi();
+            setGuestImport(null);
+          }}
+          onLater={() => setGuestImport(null)}
+          onDiscard={() => {
+            clearGuestProjects();
+            clearGuestAi();
+            setGuestImport(null);
+          }}
         />
       )}
     </Ctx.Provider>

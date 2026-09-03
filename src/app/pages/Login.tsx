@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { isSupabaseConfigured, getSupabaseCredentials, saveSupabaseCredentials } from '../lib/supabase';
 import { Eye, EyeOff, AlertCircle, Sparkles, Layers, Shield, MessageSquare } from 'lucide-react';
-import { InfineonLogo } from '../components/ui';
+import { Logo } from '../components/ui';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -103,15 +103,15 @@ export function Login() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 text-white"
-        style={{ background: 'linear-gradient(165deg, #1D1D1D 0%, #47464a 55%, #3C3A39 100%)' }}>
+        style={{ background: 'linear-gradient(165deg, #00575c 0%, #00575c 55%, #00575c 100%)' }}>
         <div className="hub-mesh absolute inset-0 opacity-40" />
         <div className="relative">
-          <InfineonLogo inverted />
+          <Logo inverted />
         </div>
         <div className="relative max-w-md space-y-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-white/70 mb-3">Open source, built like a product</p>
-            <h1 className="text-4xl leading-tight text-white mb-4">The workspace UX teams wish they had.</h1>
+            <p className="text-xs uppercase tracking-[0.22em] text-white/70 mb-3">Open source, single source of truth</p>
+            <h1 className="text-4xl leading-tight text-white mb-4">The documentaion tool product teams wish they had.</h1>
             <p className="text-white/80 text-base leading-relaxed">
               Thirteen living sections. Semantic versioning. Research, IA, heuristics, and changelog — one hub, zero scatter.
             </p>
@@ -134,18 +134,18 @@ export function Login() {
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-white/60">© Software Transformation Team · BELEG</p>
+        <p className="relative text-xs text-white/60">© Geetanjali Venkatasubramanian</p>
       </aside>
 
       <div className="flex items-center justify-center p-6 sm:p-10 overflow-y-auto">
         <div className="w-full max-w-[420px] py-6">
           <div className="lg:hidden mb-8">
-            <InfineonLogo />
+            <Logo />
           </div>
 
           <div className="mb-5">
             <div className="inline-flex items-center gap-1.5 border border-border bg-muted px-2.5 py-1 text-xs text-primary mb-4">
-              <Sparkles size={12} /> UX Project Hub
+              <Sparkles size={12} /> Project Hub
             </div>
             <h2 className="text-foreground mb-1">
               {mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create your hub' : 'Reset password'}
@@ -251,12 +251,12 @@ export function Login() {
             {mode === 'signin' ? (
               <>Don&apos;t have an account?{' '}
                 <button onClick={() => { setMode('signup'); setError(null); setInfo(null); }}
-                  className="text-primary hover:underline" style={{ fontWeight: 600 }}>Sign up</button>
+                  className="text-xs hover:underline" style={{ fontWeight: 600, color: '#00575c' }}>Sign up</button>
               </>
             ) : (
               <>Already have an account?{' '}
                 <button onClick={() => { setMode('signin'); setError(null); setInfo(null); }}
-                  className="text-primary hover:underline" style={{ fontWeight: 600 }}>Sign in</button>
+                  className="text-xs hover:underline" style={{ fontWeight: 600, color: '#00575c' }}>Sign in</button>
               </>
             )}
           </div>

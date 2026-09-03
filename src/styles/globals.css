@@ -1,7 +1,7 @@
-/* UX Project Hub — charcoal primary, 4px controls */
+/* Project Hub — charcoal primary, 4px controls */
 
 :root {
-  --brand: #47464a;
+  --brand: #00575c;
   --brand-hover: #3C3A39;
   --brand-muted: #f4f4f5;
 
@@ -20,10 +20,10 @@
   --neutral-400:  #8D8786;
   --neutral-500:  #575352;
   --neutral-600:  #3C3A39;
-  --neutral-700:  #2a2929;
+  --neutral-700:  #116d71;
   --neutral-800:  #1D1D1D;
-  --neutral-900:  #47464a;
-  --neutral-950:  #1D1D1D;
+  --neutral-900:  #3d3a47;
+  --neutral-950:  #4a3e3e;
 
   --ocean-50:  #f4f4f5;
   --ocean-100: #f4f4f5;
@@ -41,7 +41,7 @@
   --foreground:             var(--ink);
   --card:                   #ffffff;
   --card-foreground:        var(--ink);
-  --primary:                #47464a;
+  --primary:                #00575c;
   --primary-foreground:     #ffffff;
   --secondary:              var(--brand-muted);
   --secondary-foreground:   var(--ink);
@@ -52,18 +52,18 @@
   --border:                 var(--engineering-200);
   --input:                  #ffffff;
   --input-background:       #ffffff;
-  --ring:                   #47464a;
+  --ring:                   #00575c;
   --destructive:            var(--color-red);
   --destructive-foreground: #ffffff;
 
   --sidebar:                      #ffffff;
-  --sidebar-foreground:           var(--engineering-600);
-  --sidebar-primary:              #47464a;
+  --sidebar-foreground:           #00575c;
+  --sidebar-primary:              #00575c;
   --sidebar-primary-foreground:   #ffffff;
   --sidebar-accent:               var(--brand-muted);
   --sidebar-accent-foreground:    var(--ink);
   --sidebar-border:               var(--engineering-200);
-  --sidebar-active-bg:            var(--brand-muted);
+  --sidebar-active-bg:            var(--neutral-300);
   --sidebar-active-fg:            var(--ink);
 
   --success:  var(--color-emerald);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../auth/AuthProvider';
-import { InfineonLogo } from '../components/ui';
+import { Logo } from '../components/ui';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export function ResetPassword() {
@@ -34,7 +34,7 @@ export function ResetPassword() {
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-[420px]">
         <div className="mb-8">
-          <InfineonLogo />
+          <Logo />
         </div>
         <h2 className="text-foreground mb-1">Set a new password</h2>
         <p className="text-sm text-muted-foreground mb-6">Choose a password for your hub account, then sign in with it.</p>

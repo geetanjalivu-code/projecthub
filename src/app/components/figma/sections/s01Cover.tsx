@@ -21,7 +21,7 @@ export function S01Cover() {
       <div className="bg-primary text-primary-foreground px-8 md:px-16 py-14 relative overflow-hidden">
         <div className="max-w-4xl mx-auto relative z-10">
           <p className="text-xs uppercase tracking-widest mb-3" style={{ opacity: 0.65 }}>
-            UX Project Hub · Infineon Technologies
+            Project
           </p>
           <h1 className="text-primary-foreground mb-3">{currentProject.name}</h1>
           <input

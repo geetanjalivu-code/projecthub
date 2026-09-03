@@ -428,7 +428,7 @@ export function Avatar({ name, size = 7 }: { name: string; size?: number }) {
 
 // ── SWT Logo ──────────────────────────────────────────────────────────────────
 
-export function InfineonLogo({ collapsed = false, inverted = false }: { collapsed?: boolean; inverted?: boolean }) {
+export function Logo({ collapsed = false, inverted = false }: { collapsed?: boolean; inverted?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
@@ -440,7 +440,7 @@ export function InfineonLogo({ collapsed = false, inverted = false }: { collapse
       {!collapsed && (
         <div>
           <p className={`text-[10px] uppercase tracking-[0.18em] leading-none mb-1 ${inverted ? 'text-white/70' : 'text-muted-foreground'}`}>BELEG</p>
-          <p className={`text-sm leading-none ${inverted ? 'text-white' : 'text-foreground'}`} style={{ fontWeight: 650 }}>UX Project Hub</p>
+          <p className={`text-sm leading-none ${inverted ? 'text-white' : 'text-foreground'}`} style={{ fontWeight: 650 }}>Project Hub</p>
         </div>
       )}
     </div>

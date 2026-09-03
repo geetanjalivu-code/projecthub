@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { StoreProvider, useStore } from './store';
+import { AiSettingsProvider } from './ai/AiSettingsProvider';
 import { Dashboard } from './Dashboard';
 import { Workspace } from './Workspace';
 import { Login } from './pages/Login';
@@ -42,12 +43,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <StoreProvider>
-          <Routes>
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/*" element={<AppShell />} />
-          </Routes>
-        </StoreProvider>
+        <AiSettingsProvider>
+          <StoreProvider>
+            <Routes>
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/*" element={<AppShell />} />
+            </Routes>
+          </StoreProvider>
+        </AiSettingsProvider>
       </AuthProvider>
     </BrowserRouter>
   );

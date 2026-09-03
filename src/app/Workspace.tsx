@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
-  ChevronLeft, ChevronRight, ArrowLeft, BookOpen,
+  ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft, BookOpen,
   FileText, Map, BarChart2, Users, GitBranch, Search,
   Layers, Cpu, FlaskConical, TrendingUp, MessageSquare, Clock, Plus,
 } from 'lucide-react';
 import { useStore } from './store';
-import { InfineonLogo, Avatar, BtnPrimary } from './components/ui';
+import { Logo, Avatar, BtnPrimary } from './components/ui';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { ProfileModal } from './components/ProfileModal';
 import { GuestBanner } from './components/GuestBanner';
@@ -85,7 +85,7 @@ export function Workspace() {
     ? { text: 'Great progress!', cls: 'text-success' }
     : progress >= 30
     ? { text: 'Keep going, good progress.', cls: 'text-warning' }
-    : { text: 'Fill in every section before moving to the next phase.', cls: 'text-destructive' };
+    : { text: 'Fill in each section to maintain project', cls: 'text-warning' };
 
   const STATUS_OPTIONS = ['Not Started', 'In Progress', 'In Review', 'Completed', 'On Hold'];
 
@@ -97,23 +97,28 @@ export function Workspace() {
       {/* Sidebar */}
       <aside className={`shrink-0 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ${sidebarOpen ? 'w-64' : 'w-14'}`}>
 
-        {/* Logo — click to collapse/expand */}
+        {/* Logo — click to return to the dashboard */}
         <div className="flex items-center px-4 py-4 border-b border-sidebar-border">
           <button
-            onClick={() => setSidebar(o => !o)}
+            type="button"
+            onClick={closeProject}
             className="flex items-center gap-2.5 hover:opacity-70 transition-opacity text-left w-full"
-            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            title="Back to dashboard"
           >
-            <InfineonLogo collapsed={!sidebarOpen} />
+            <Logo collapsed={!sidebarOpen} />
           </button>
         </div>
 
-        {/* Back to hub */}
+        {/* Collapse / expand */}
         <div className="px-2 py-2 border-b border-sidebar-border">
-          <button onClick={closeProject}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-all">
-            <ArrowLeft size={14} className="shrink-0" />
-            {sidebarOpen && 'Back to Hub'}
+          <button
+            type="button"
+            onClick={() => setSidebar(o => !o)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-all"
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {sidebarOpen ? <PanelLeftClose size={14} className="shrink-0" /> : <PanelLeft size={14} className="shrink-0" />}
+            {sidebarOpen && 'Collapse sidebar'}
           </button>
         </div>
 

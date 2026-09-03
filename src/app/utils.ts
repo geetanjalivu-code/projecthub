@@ -1,7 +1,10 @@
 import { Project, Version, ChangelogEntry, ChangelogType, ProjectSections, ProjectStatus, ProjectPhase } from './types';
 
 // ── ID generator ──────────────────────────────────────────────────────────────
-export const uid = () => Math.random().toString(36).slice(2, 10);
+export const uid = () =>
+  (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 export const nowISO  = () => new Date().toISOString();
@@ -149,57 +152,106 @@ export function createProject(params: {
 // ── localStorage I/O ──────────────────────────────────────────────────────────
 const LEGACY_PROJECTS_KEY = 'uxHub_projects';
 export const GUEST_PROJECTS_KEY = 'uxHub_guest_projects';
+const RECOVERY_KEY = 'uxHub_recovery_projects';
 
-function parseProjects(raw: string | null): Project[] {
+export const userProjectsKey = (userId: string) => `uxHub_user_${userId}`;
+
+function allAccountProjectIds(): Set<string> {
+  const ids = new Set<string>();
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('uxHub_user_')) continue;
+      for (const p of parseProjects(localStorage.getItem(k))) ids.add(p.id);
+    }
+  } catch { /* ignore */ }
+  return ids;
+}
+
+function stripAccountCopies(list: Project[]): Project[] {
+  const accountIds = allAccountProjectIds();
+  return list.filter(p => !accountIds.has(p.id));
+}
+
+function looksLikeProject(v: unknown): v is Project {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  return typeof p.id === 'string' && !!p.sections && typeof p.sections === 'object';
+}
+
+export function unwrapProject(v: unknown): Project | null {
+  if (looksLikeProject(v)) return v;
+  if (v && typeof v === 'object' && looksLikeProject((v as { data?: unknown }).data)) {
+    return (v as { data: Project }).data;
+  }
+  return null;
+}
+
+export function parseProjects(raw: string | null): Project[] {
   if (!raw) return [];
   try {
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data as Project[] : [];
+    if (Array.isArray(data)) return data.map(unwrapProject).filter((p): p is Project => !!p);
+    const one = unwrapProject(data);
+    return one ? [one] : [];
   } catch {
     return [];
   }
 }
 
-/** Move leftover shared-key data into the guest bucket, then delete the shared key. */
-function absorbLegacySharedKey() {
-  try {
-    const legacy = localStorage.getItem(LEGACY_PROJECTS_KEY);
-    if (legacy && parseProjects(legacy).length > 0) {
-      const existing = parseProjects(localStorage.getItem(GUEST_PROJECTS_KEY));
-      if (existing.length === 0) localStorage.setItem(GUEST_PROJECTS_KEY, legacy);
+export function mergeProjectLists(...lists: Project[][]): Project[] {
+  const map = new Map<string, Project>();
+  for (const list of lists) {
+    for (const p of list) {
+      const existing = map.get(p.id);
+      if (!existing || new Date(p.lastUpdated || 0).getTime() >= new Date(existing.lastUpdated || 0).getTime()) {
+        map.set(p.id, p);
+      }
     }
-    localStorage.removeItem(LEGACY_PROJECTS_KEY);
-  } catch { /* ignore */ }
+  }
+  return [...map.values()].sort(
+    (a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime(),
+  );
 }
 
-export const loadGuestProjects = (): Project[] => {
-  absorbLegacySharedKey();
-  return parseProjects(localStorage.getItem(GUEST_PROJECTS_KEY));
+export function loadUserProjectsLocal(userId: string): Project[] {
+  return parseProjects(localStorage.getItem(userProjectsKey(userId)));
+}
+
+export const saveUserProjectsLocal = (userId: string, projects: Project[]) => {
+  localStorage.setItem(userProjectsKey(userId), JSON.stringify(projects));
 };
 
+export function loadGuestProjects(): Project[] {
+  try { localStorage.removeItem(RECOVERY_KEY); } catch { /* ignore */ }
+
+  const legacy = parseProjects(localStorage.getItem(LEGACY_PROJECTS_KEY));
+  const rawGuest = parseProjects(localStorage.getItem(GUEST_PROJECTS_KEY));
+  const isolated = stripAccountCopies(mergeProjectLists(rawGuest, stripAccountCopies(legacy)));
+
+  try { localStorage.removeItem(LEGACY_PROJECTS_KEY); } catch { /* ignore */ }
+  if (isolated.length !== rawGuest.length || legacy.length > 0) {
+    localStorage.setItem(GUEST_PROJECTS_KEY, JSON.stringify(isolated));
+  }
+  return isolated;
+}
+
 export const saveGuestProjects = (projects: Project[]) => {
-  localStorage.setItem(GUEST_PROJECTS_KEY, JSON.stringify(projects));
+  localStorage.setItem(GUEST_PROJECTS_KEY, JSON.stringify(stripAccountCopies(projects)));
 };
 
 export const clearGuestProjects = () => {
   localStorage.removeItem(GUEST_PROJECTS_KEY);
   localStorage.removeItem(LEGACY_PROJECTS_KEY);
+  localStorage.removeItem(RECOVERY_KEY);
 };
 
-export function clearUserProjectCache() {
-  try {
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && (k === LEGACY_PROJECTS_KEY || k.startsWith('uxHub_projects_'))) keys.push(k);
-    }
-    keys.forEach(k => localStorage.removeItem(k));
-  } catch { /* ignore */ }
+export function clearUserProjectCache(userId?: string) {
+  if (userId) localStorage.removeItem(userProjectsKey(userId));
 }
 
-/** @deprecated Use loadGuestProjects / Supabase. Kept so old imports compile. */
-export const loadProjects = (): Project[] => [];
-export const saveProjects = (_projects: Project[]) => { /* signed-in data is not cached locally */ };
+export const loadProjects = (): Project[] => loadGuestProjects();
+export const saveProjects = (projects: Project[]) => saveGuestProjects(projects);
 
 // ── Debounce ──────────────────────────────────────────────────────────────────
 export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number) {

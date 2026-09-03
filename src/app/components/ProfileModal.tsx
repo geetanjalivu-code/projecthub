@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
-import { getAiSettings, saveAiSettings, detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
+import { useAiSettings } from '../ai/AiSettingsProvider';
+import { detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
 import { X, LogOut, User, Lock, Check, KeyRound, LogIn } from 'lucide-react';
 
 interface Props { onClose: () => void; }
 
 export function ProfileModal({ onClose }: Props) {
   const { user, profile, updateProfile, signOut, isGuest, exitGuest } = useAuth();
+  const { settings, saveSettings } = useAiSettings();
   const [name, setName] = useState(profile?.display_name ?? '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -17,10 +19,9 @@ export function ProfileModal({ onClose }: Props) {
   const [pwOk, setPwOk] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 
-  const ai = getAiSettings();
-  const [apiKey, setApiKey] = useState(ai.apiKey);
-  const [model, setModel] = useState(ai.model);
-  const [aiProvider, setAiProvider] = useState<AiProvider>(ai.provider);
+  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const [model, setModel] = useState(settings.model);
+  const [aiProvider, setAiProvider] = useState<AiProvider>(settings.provider);
   const [aiSaved, setAiSaved] = useState(false);
 
   const authProviders = user?.app_metadata?.providers as string[] | undefined;
@@ -47,9 +48,9 @@ export function ProfileModal({ onClose }: Props) {
     else { setPwOk(true); setNewPw(''); setTimeout(() => setPwOk(false), 3000); }
   };
 
-  const saveAi = () => {
+  const saveAi = async () => {
     const next = detectAiProvider(apiKey, aiProvider);
-    saveAiSettings({ apiKey, model, provider: next });
+    await saveSettings({ apiKey, model, provider: next });
     setAiProvider(next);
     setAiSaved(true);
     setTimeout(() => setAiSaved(false), 2000);
@@ -128,7 +129,11 @@ export function ProfileModal({ onClose }: Props) {
               <KeyRound size={13} className="text-muted-foreground" />
               <span className="text-xs text-muted-foreground uppercase tracking-widest">Hub Guide API key</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-2">Gemini (AIza…) or OpenAI (sk-…). Stored in this browser. Preferred model is tried first; the rest are fallbacks.</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              {isGuest
+                ? 'Stored only for this guest session on this device. Sign in to keep the key with your account.'
+                : 'Stored on your account and loaded when you sign in. Not shared with other users on this browser.'}
+            </p>
             <div className="space-y-2">
               <input type="password" value={apiKey} onChange={e => {
                 setApiKey(e.target.value);

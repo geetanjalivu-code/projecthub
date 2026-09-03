@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Search, Trash2, FolderOpen, LayoutGrid, CircleDot, PauseCircle, CheckCircle2, Eye } from 'lucide-react';
 import { useStore } from './store';
 import { useAuth } from './auth/AuthProvider';
-import { InfineonLogo, StatusPill, BtnPrimary, Avatar } from './components/ui';
+import { Logo, StatusPill, BtnPrimary, Avatar } from './components/ui';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { ProfileModal } from './components/ProfileModal';
 import { NewProjectModal } from './components/NewProjectModal';
@@ -116,49 +116,12 @@ export function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background hub-page-glow">
-      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="px-4 py-5 border-b border-sidebar-border">
-          <InfineonLogo />
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5">
-          {nav.map(item => {
-            const Icon = item.icon;
-            const active = filter === item.id || (item.id === 'All' && !['In Progress', 'In Review', 'Completed', 'On Hold'].includes(filter));
-            const count = item.id === 'All' ? projects.length : projects.filter(p => p.status === item.id).length;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setFilter(item.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-left border-l-2 transition-all ${
-                  active
-                    ? 'bg-[--sidebar-active-bg] text-[--sidebar-active-fg] border-primary'
-                    : 'border-transparent text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                }`}
-                style={{ fontWeight: active ? 600 : 500 }}
-              >
-                <Icon size={15} className="shrink-0" />
-                <span className="flex-1 truncate">{item.label}</span>
-                <span className="text-[11px] opacity-60">{count}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="p-4 border-t border-sidebar-border text-[11px] text-muted-foreground space-y-1">
-          <p>Terms · Imprint · Privacy</p>
-          <p>© 1999–2026 Infineon Technologies AG</p>
-        </div>
-      </aside>
+
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="shrink-0 flex items-center gap-4 px-6 py-3 border-b border-border glass-header">
-          <div className="flex-1 min-w-0 md:hidden">
-            <InfineonLogo />
-          </div>
-          <div className="hidden md:block flex-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-widest">UX Project Hub</p>
-            <p className="text-sm text-foreground" style={{ fontWeight: 600 }}>
-              {isGuest ? 'Guest session' : `Hello, ${displayName.split(' ')[0]}`}
-            </p>
+        <header className="shrink-0 flex items-center gap-4 px-8 md:px-12 lg:px-16 py-3 border-b border-border glass-header">
+          <div className="flex-1 min-w-0">
+            <Logo />
           </div>
           <NotificationsPanel />
           <button
@@ -170,11 +133,15 @@ export function Dashboard() {
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-6 py-6 pb-24">
+        <main className="flex-1 overflow-y-auto px-8 md:px-12 lg:px-16 py-8 pb-24">
+          <div className="mx-auto w-full max-w-6xl">
           <GuestBanner onSignIn={exitGuest} />
 
           <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
             <div>
+            <p className="text-sm text-foreground" style={{ fontWeight: 600 }}>
+              {isGuest ? 'Guest session' : `Hello, ${displayName.split(' ')[0]}`}
+            </p>
               <h2 className="text-foreground">All projects</h2>
               <p className="text-sm text-muted-foreground">Manage and track your UX design projects — cover to changelog.</p>
             </div>
@@ -235,6 +202,7 @@ export function Dashboard() {
               <BtnPrimary onClick={() => setShowModal(true)}><Plus size={15} /> Create new project</BtnPrimary>
             </div>
           )}
+          </div>
         </main>
       </div>
 

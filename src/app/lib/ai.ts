@@ -1,6 +1,6 @@
 import { Project, versionStr } from '../types';
 
-export const HUB_SYSTEM_INSTRUCTIONS = `You are Hub Guide, the in-app assistant for UX Project Hub (BELEG) — an open-source workspace for UX designers to document and run design projects from cover to changelog.
+export const HUB_SYSTEM_INSTRUCTIONS = `You are Hub Guide, the in-app assistant for Project Hub (BELEG) — an open-source workspace for UX designers to document and run design projects from cover to changelog.
 
 VOICE
 - Sharp, calm, product-quality. Never robotic. Never oversell.
@@ -98,18 +98,27 @@ export function buildHubContext(projects: Project[], currentProjectId: string | 
   });
 
   return JSON.stringify({
-    product: 'UX Project Hub',
+    product: 'Project Hub',
     projectCount: projects.length,
     openProjectId: currentProjectId,
     projects: payload,
   });
 }
 
-const KEY = 'uxHub_ai_key';
-const MODEL_KEY = 'uxHub_ai_model';
-const PROVIDER_KEY = 'uxHub_ai_provider';
-
 export type AiProvider = 'openai' | 'gemini';
+
+export type AiSettings = {
+  apiKey: string;
+  provider: AiProvider;
+  model: string;
+};
+
+export const EMPTY_AI: AiSettings = { apiKey: '', provider: 'openai', model: 'gpt-4o-mini' };
+
+const LEGACY_KEY = 'uxHub_ai_key';
+const LEGACY_MODEL = 'uxHub_ai_model';
+const LEGACY_PROVIDER = 'uxHub_ai_provider';
+export const GUEST_AI_KEY = 'uxHub_guest_ai';
 
 export const OPENAI_MODELS = [
   'gpt-4o-mini',
@@ -144,25 +153,52 @@ export function detectAiProvider(apiKey: string, explicit?: AiProvider | ''): Ai
   return 'openai';
 }
 
-export function getAiSettings() {
-  const apiKey = localStorage.getItem(KEY) ?? '';
-  const storedProvider = localStorage.getItem(PROVIDER_KEY) as AiProvider | null;
-  const provider = detectAiProvider(apiKey, storedProvider ?? '');
+export function normalizeAiSettings(partial: Partial<AiSettings> | null | undefined): AiSettings {
+  const apiKey = (partial?.apiKey ?? '').trim();
+  const provider = detectAiProvider(apiKey, partial?.provider ?? '');
   const fallback = provider === 'gemini' ? GEMINI_MODELS[0] : OPENAI_MODELS[0];
-  return {
-    apiKey,
-    provider,
-    model: localStorage.getItem(MODEL_KEY) || fallback,
-  };
+  return { apiKey, provider, model: (partial?.model || fallback).trim() || fallback };
 }
 
-export function saveAiSettings(s: { apiKey?: string; model?: string; provider?: AiProvider }) {
-  if (s.apiKey !== undefined) {
-    if (s.apiKey.trim()) localStorage.setItem(KEY, s.apiKey.trim());
-    else localStorage.removeItem(KEY);
+function absorbLegacyAiIntoGuest() {
+  try {
+    const legacyKey = localStorage.getItem(LEGACY_KEY);
+    if (legacyKey && !localStorage.getItem(GUEST_AI_KEY)) {
+      saveGuestAi(normalizeAiSettings({
+        apiKey: legacyKey,
+        model: localStorage.getItem(LEGACY_MODEL) ?? undefined,
+        provider: (localStorage.getItem(LEGACY_PROVIDER) as AiProvider | null) ?? undefined,
+      }));
+    }
+    localStorage.removeItem(LEGACY_KEY);
+    localStorage.removeItem(LEGACY_MODEL);
+    localStorage.removeItem(LEGACY_PROVIDER);
+  } catch { /* ignore */ }
+}
+
+export function loadGuestAi(): AiSettings {
+  absorbLegacyAiIntoGuest();
+  try {
+    return normalizeAiSettings(JSON.parse(localStorage.getItem(GUEST_AI_KEY) ?? 'null'));
+  } catch {
+    return { ...EMPTY_AI };
   }
-  if (s.provider) localStorage.setItem(PROVIDER_KEY, s.provider);
-  if (s.model !== undefined) localStorage.setItem(MODEL_KEY, s.model.trim());
+}
+
+export function saveGuestAi(s: AiSettings) {
+  localStorage.setItem(GUEST_AI_KEY, JSON.stringify(normalizeAiSettings(s)));
+}
+
+export function clearGuestAi() {
+  absorbLegacyAiIntoGuest();
+  localStorage.removeItem(GUEST_AI_KEY);
+  localStorage.removeItem(LEGACY_KEY);
+  localStorage.removeItem(LEGACY_MODEL);
+  localStorage.removeItem(LEGACY_PROVIDER);
+}
+
+export function guestAiHasKey() {
+  return !!loadGuestAi().apiKey;
 }
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string };

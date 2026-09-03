@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, KeyRound, Send, Sparkles, X, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
-import { buildHubContext, getAiSettings, saveAiSettings, streamHubChat, ChatTurn, detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
+import { useAiSettings } from '../ai/AiSettingsProvider';
+import { buildHubContext, streamHubChat, ChatTurn, detectAiProvider, OPENAI_MODELS, GEMINI_MODELS, AiProvider } from '../lib/ai';
 
 const SUGGESTIONS = [
   'What can we do with the Project Hub?',
@@ -12,12 +13,12 @@ const SUGGESTIONS = [
 
 export function AiAssistant() {
   const { projects, currentProjectId } = useStore();
+  const { settings, hasKey, saveSettings } = useAiSettings();
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
   const [provider, setProvider] = useState<AiProvider>('openai');
-  const [hasKey, setHasKey] = useState(false);
   const [activeModel, setActiveModel] = useState('');
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,24 +28,21 @@ export function AiAssistant() {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadSettings = () => {
-    const s = getAiSettings();
-    setApiKey(s.apiKey);
-    setModel(s.model);
-    setProvider(s.provider);
-    setHasKey(!!s.apiKey);
+    setApiKey(settings.apiKey);
+    setModel(settings.model);
+    setProvider(settings.provider);
   };
 
-  useEffect(() => { loadSettings(); }, [open]);
+  useEffect(() => { loadSettings(); }, [open, settings]);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
   }, [turns, busy, open]);
 
-  const persistKey = () => {
+  const persistKey = async () => {
     const nextProvider = detectAiProvider(apiKey, provider);
-    saveAiSettings({ apiKey, model, provider: nextProvider });
+    await saveSettings({ apiKey, model, provider: nextProvider });
     setProvider(nextProvider);
-    setHasKey(!!apiKey.trim());
     setSettingsOpen(false);
     setError(null);
   };
@@ -52,7 +50,7 @@ export function AiAssistant() {
   const ask = async (question: string) => {
     const q = question.trim();
     if (!q || busy) return;
-    const s = getAiSettings();
+    const s = settings;
     if (!s.apiKey) {
       setSettingsOpen(true);
       setError('Add your Gemini or OpenAI API key to talk to Hub Guide.');
@@ -103,7 +101,7 @@ export function AiAssistant() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-primary text-primary-foreground pl-3 pr-4 py-2.5 shadow-lg hover:bg-neutral-700 transition-all"
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-primary rounded-full text-primary-foreground pl-3 pr-4 py-2.5 shadow-lg hover:bg-neutral-700 transition-all"
         style={{ fontWeight: 600 }}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15">

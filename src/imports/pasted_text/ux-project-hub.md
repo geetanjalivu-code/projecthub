@@ -1,6 +1,6 @@
-Build a fully working web application called "UX Project Hub" 
-for Infineon Technologies. This is an internal tool for UX 
-designers to manage and document multiple design projects 
+Build a fully working web application called "Project Hub" 
+This is an internal tool for UX 
+designers and product owners to manage and document multiple design projects 
 from start to finish. All data stored in localStorage. 
 No backend needed.
 
@@ -70,12 +70,9 @@ Sidebar:
   In Review
   Completed
   On Hold
-- Footer: Terms of use, Imprint, 
-  Privacy policy
-- Copyright: © 1999–2023 Infineon Technologies AG
 
 Topbar:
-- Title: UX Project Hub
+- Title: Project Hub
 - Notification bell icon
 - User avatar initials (AA)
 

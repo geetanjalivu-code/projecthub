@@ -175,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    const { flushHubSaves } = await import('../store');
+    await flushHubSaves();
     setIsGuest(false);
     setPasswordRecovery(false);
     localStorage.removeItem(GUEST_KEY);

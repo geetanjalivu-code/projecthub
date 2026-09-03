@@ -1,4 +1,4 @@
--- UX Project Hub — paste this entire script into
+-- Project Hub — paste this entire script into
 -- Supabase Dashboard → SQL Editor → New query → Run
 --
 -- Do this once per project. Safe to re-run.
@@ -31,14 +31,28 @@ create policy "profiles_update_own"
   with check (id = auth.uid());
 
 create table if not exists public.projects (
-  id text primary key,
+  id text not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   workspace_id uuid,
   data jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
 );
 
 create index if not exists projects_user_id_idx on public.projects (user_id);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.projects'::regclass
+      and contype = 'p'
+      and pg_get_constraintdef(oid) = 'PRIMARY KEY (user_id, id)'
+  ) then
+    alter table public.projects drop constraint if exists projects_pkey;
+    alter table public.projects add primary key (user_id, id);
+  end if;
+end $$;
 
 alter table public.projects enable row level security;
 
@@ -94,5 +108,42 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 grant usage on schema public to anon, authenticated;
+-- DML grants are required in addition to RLS. Missing grants produce
+-- "permission denied for table projects" for signed-in users.
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.projects to authenticated;
+
+-- Per-account Hub Guide keys (not shared across the browser)
+create table if not exists public.user_settings (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  ai_api_key text not null default '',
+  ai_model text not null default 'gpt-4o-mini',
+  ai_provider text not null default 'openai',
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_settings enable row level security;
+
+drop policy if exists "user_settings_select_own" on public.user_settings;
+drop policy if exists "user_settings_insert_own" on public.user_settings;
+drop policy if exists "user_settings_update_own" on public.user_settings;
+drop policy if exists "user_settings_delete_own" on public.user_settings;
+
+create policy "user_settings_select_own"
+  on public.user_settings for select to authenticated
+  using (user_id = auth.uid());
+
+create policy "user_settings_insert_own"
+  on public.user_settings for insert to authenticated
+  with check (user_id = auth.uid());
+
+create policy "user_settings_update_own"
+  on public.user_settings for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+create policy "user_settings_delete_own"
+  on public.user_settings for delete to authenticated
+  using (user_id = auth.uid());
+
+grant select, insert, update, delete on public.user_settings to authenticated;
