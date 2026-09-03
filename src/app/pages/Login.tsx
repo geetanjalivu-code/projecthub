@@ -110,7 +110,7 @@ export function Login() {
         </div>
         <div className="relative max-w-md space-y-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-white/70 mb-3">Open source, single source of truth</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-white/70 mb-3">Single source of truth</p>
             <h1 className="text-4xl leading-tight text-white mb-4">The documentaion tool product teams wish they had.</h1>
             <p className="text-white/80 text-base leading-relaxed">
               Thirteen living sections. Semantic versioning. Research, IA, heuristics, and changelog — one hub, zero scatter.
